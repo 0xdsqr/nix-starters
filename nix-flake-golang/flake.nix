@@ -1,21 +1,21 @@
 {
   description = "🟪 Go 1.24 Project with Nix";
-  
+
   # Define the sources we'll use in our flake
   inputs = {
     # Unstable channel for latest package versions
     # This provides access to the newest available Go and tools
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
-    
+
     # Stable channel for production-ready packages
     # Useful for dependencies that require more stability
     nixpkgs-stable.url = "github:NixOS/nixpkgs/release-24.11";
-    
+
     # Provides utility functions for working with flakes
     # Simplifies handling multiple systems (x86_64-linux, aarch64-darwin, etc.)
     flake-utils.url = "github:numtide/flake-utils";
   };
-  
+
   outputs = { self, nixpkgs-unstable, nixpkgs-stable, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
@@ -25,19 +25,43 @@
 
         # Define the applicaiotn name
         appName = "dsqr";
-      in {
+
+        # Define application as a variable
+        goApp = pkgs-unstable.stdenv.mkDerivation {
+          name = appName;
+          src = ./.;
+
+          nativeBuildInputs = with pkgs-unstable; [
+            go_1_24
+          ];
+
+          buildPhase = ''
+            export GOCACHE=$TMPDIR/go-cache
+            export GOPATH=$TMPDIR/go
+            cd cmd/${appName}
+            go build -o ${appName}
+          '';
+
+          installPhase = ''
+            mkdir -p $out/bin
+            cp ${appName} $out/bin/
+            chmod +x $out/bin/${appName}
+          '';
+        };
+      in
+      {
         # Default development shell with necessary tools
         devShells.default = pkgs-unstable.mkShell {
           buildInputs = with pkgs-unstable; [
             # Core Go development tools
-            go_1_24        # Go compiler and runtime (version 1.24)
-            gopls          # Official Go language server protocol implementation
-            gotools        # Essential Go development utilities
-            golangci-lint  # Meta-linter combining 50+ linters in one tool
-            delve          # Powerful debugger for Go applications
-            git            # Distributed version control system
+            go_1_24 # Go compiler and runtime (version 1.24)
+            gopls # Official Go language server protocol implementation
+            gotools # Essential Go development utilities
+            golangci-lint # Meta-linter combining 50+ linters in one tool
+            delve # Powerful debugger for Go applications
+            git # Distributed version control system
           ];
-          
+
           # Executed when entering the development shell
           shellHook = ''
             # Set up project-local configuration
@@ -51,30 +75,31 @@
             echo "🟪 Go 1.24 development environment activated!"
           '';
         };
-        
-       packages.default = pkgs-unstable.stdenv.mkDerivation {
-          name = appName;
-          src = ./.;
 
-          nativeBuildInputs = with pkgs-unstable; [
-            go
+        packages.default = goApp;
+
+        packages.container = pkgs-unstable.dockerTools.buildLayeredImage {
+          name = appName;
+          tag = "latest";
+
+          contents = [
+            self.packages.${system}.default
+            pkgs-unstable.busybox
           ];
 
-          buildPhase = ''
-            export GOCACHE=$TMPDIR/go-cache
-            export GOPATH=$TMPDIR/go
-
-            cd cmd/${appName}
-            go build -o ${appName}
-          '';
-
-          installPhases = ''
-            mkdir -p $out/bin
-            cp cmd/${appName}/${appName} $out/bin/
-            chmod +x $out/bin/${appName}
-          '';
+          config = {
+            Cmd = [ "${appName}" ];
+            ExposedPorts = {
+              "8080/tcp" = { };
+            };
+          };
         };
-        
+
+        apps.default = {
+          type = "app";
+          program = "${goApp}/bin/${appName}";
+        };
+
         # Define a formatter for the flake itself
         # This helps maintain consistent formatting with 'nix fmt'
         # Run with: nix fmt
