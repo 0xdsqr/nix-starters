@@ -52,8 +52,8 @@
           '';
         };
         
-        packages.default = pkgs-unstable.stdenv.mkDerivation {
-          name = ${appName};
+       packages.default = pkgs-unstable.stdenv.mkDerivation {
+          name = appName;
           src = ./.;
 
           nativeBuildInputs = with pkgs-unstable; [
@@ -63,8 +63,15 @@
           buildPhase = ''
             export GOCACHE=$TMPDIR/go-cache
             export GOPATH=$TMPDIR/go
-            
+
+            cd cmd/${appName}
             go build -o ${appName}
+          '';
+
+          installPhases = ''
+            mkdir -p $out/bin
+            cp cmd/${appName}/${appName} $out/bin/
+            chmod +x $out/bin/${appName}
           '';
         };
         
