@@ -22,6 +22,9 @@
         # Import both package sets for the current system
         pkgs-unstable = import nixpkgs-unstable { inherit system; };
         pkgs-stable = import nixpkgs-stable { inherit system; };
+
+        # Define the applicaiotn name
+        appName = "dsqr";
       in {
         # Default development shell with necessary tools
         devShells.default = pkgs-unstable.mkShell {
@@ -46,6 +49,22 @@
             mkdir -p .go/bin
             
             echo "🟪 Go 1.24 development environment activated!"
+          '';
+        };
+        
+        packages.default = pkgs-unstable.stdenv.mkDerivation {
+          name = ${appName};
+          src = ./.;
+
+          nativeBuildInputs = with pkgs-unstable; [
+            go
+          ];
+
+          buildPhase = ''
+            export GOCACHE=$TMPDIR/go-cache
+            export GOPATH=$TMPDIR/go
+            
+            go build -o ${appName}
           '';
         };
         
